@@ -96,6 +96,7 @@ export default function App() {
           buzzes={quiz.buzzes}
           onArmBuzzer={quiz.armBuzzer}
           onResetBuzzer={quiz.resetBuzzer}
+          onPressBuzzer={quiz.pressBuzzer}
           onUpdateQuestion={quiz.updateQuestion}
           onUpdateScore={quiz.updateScore}
           onLeaveRoom={() => {

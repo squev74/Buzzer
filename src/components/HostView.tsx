@@ -18,6 +18,7 @@ interface HostViewProps {
   buzzes: BuzzEvent[];
   onArmBuzzer: (armed: boolean) => Promise<void>;
   onResetBuzzer: () => Promise<void>;
+  onPressBuzzer: () => Promise<void>;
   onUpdateQuestion: (question: string) => Promise<void>;
   onUpdateScore: (playerId: string, delta: number) => Promise<void>;
   onLeaveRoom: () => void;
@@ -31,6 +32,7 @@ export function HostView({
   buzzes,
   onArmBuzzer,
   onResetBuzzer,
+  onPressBuzzer,
   onUpdateQuestion,
   onUpdateScore,
   onLeaveRoom,
@@ -42,6 +44,7 @@ export function HostView({
   const isArmed = room?.buzzerState ?? false;
   const firstBuzz = buzzes[0];
   const firstTimestamp = firstBuzz?.timestamp?.toMillis ? firstBuzz.timestamp.toMillis() : (firstBuzz?.timestamp?.seconds ? firstBuzz.timestamp.seconds * 1000 : null);
+  const myBuzz = buzzes.find((b) => b.playerId === currentUser.id);
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -52,11 +55,11 @@ export function HostView({
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       {/* Top Header */}
-      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-lg">
+      <header className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-md">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 bg-indigo-600/20 text-indigo-400 px-3.5 py-1.5 rounded-xl border border-indigo-500/30 font-bold text-sm">
             <ShieldCheck className="w-4 h-4" />
-            <span>Organisateur</span>
+            <span>Organisateur & Joueur</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400 uppercase tracking-wider hidden sm:inline">Salon :</span>
@@ -76,7 +79,7 @@ export function HostView({
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-800 px-3.5 py-1.5 rounded-xl text-sm font-semibold text-slate-300 border border-slate-700/60">
             <Users className="w-4 h-4 text-pink-400" />
-            <span>{participants.length} joueurs</span>
+            <span>{participants.length} participants</span>
           </div>
           <button
             onClick={onLeaveRoom}
@@ -111,8 +114,8 @@ export function HostView({
                 </h2>
                 <p className="text-slate-400 text-xs mt-1">
                   {isArmed 
-                    ? (buzzes.length > 0 ? "Un joueur a buzzé ! Le premier est verrouillé." : "Les joueurs peuvent buzzer...") 
-                    : "Cliquez sur 'Armer' pour autoriser les joueurs à buzzer."}
+                    ? (buzzes.length > 0 ? `${buzzes.length} participant(s) ont buzzé. Le buzzer reste ouvert pour les suivants !` : "Les participants peuvent buzzer (plusieurs buzzes autorisés par manche).") 
+                    : "Cliquez sur 'Armer' pour autoriser les participants à buzzer."}
                 </p>
               </div>
 
@@ -144,6 +147,33 @@ export function HostView({
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Host Personal Buzzer Section (Allows Host to Play Too!) */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-pink-400 flex items-center gap-1.5 mb-1">
+                <Zap className="w-4 h-4" /> Mon Buzzer Personnel (En tant que joueur)
+              </span>
+              <p className="text-sm text-slate-300">
+                {myBuzz ? `Vous avez buzzé en ${myBuzz.position}e position !` : (isArmed ? "Le buzzer est ouvert, vous pouvez participer !" : "Le buzzer est actuellement verrouillé.")}
+              </p>
+            </div>
+
+            <button
+              onClick={onPressBuzzer}
+              disabled={!isArmed || !!myBuzz}
+              className={`px-8 py-4 rounded-2xl font-black uppercase tracking-wider text-sm shadow-xl transition-all flex items-center gap-2 shrink-0 ${
+                myBuzz
+                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 cursor-default'
+                  : isArmed
+                  ? 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-red-600/30 animate-pulse cursor-pointer transform hover:scale-105'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed opacity-60'
+              }`}
+            >
+              <Zap className="w-5 h-5 fill-current" />
+              {myBuzz ? `Buzzé ! (#${myBuzz.position})` : "BUZZER !"}
+            </button>
           </div>
 
           {/* Question Panel */}
@@ -192,7 +222,7 @@ export function HostView({
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-400" /> Ordre d'Arrivée (Podium en Temps Réel)
+                <Trophy className="w-5 h-5 text-amber-400" /> Ordre d'Arrivée (Tous les buzzes en direct)
               </h3>
               <span className="text-xs bg-slate-800 px-3 py-1 rounded-full text-slate-400 font-mono">
                 {buzzes.length} buzz(es)
@@ -202,7 +232,7 @@ export function HostView({
             {buzzes.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl">
                 <Zap className="w-10 h-10 text-slate-700 mx-auto mb-2 animate-pulse" />
-                <p className="text-slate-400 text-sm font-medium">En attente que les joueurs buzzent...</p>
+                <p className="text-slate-400 text-sm font-medium">En attente que les participants buzzent...</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -243,16 +273,15 @@ export function HostView({
                         </div>
                       </div>
 
-                      {isFirst && (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => onUpdateScore(buzz.playerId, 1)}
-                            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center gap-1.5"
-                          >
-                            <Plus className="w-4 h-4" /> +1 Point
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => onUpdateScore(buzz.playerId, 1)}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center gap-1.5"
+                          title="Attribuer 1 point"
+                        >
+                          <Plus className="w-4 h-4" /> +1 Point
+                        </button>
+                      </div>
                     </div>
                   );
                 })}

@@ -33,6 +33,16 @@ export interface RoomData {
   createdAt?: any;
 }
 
+// Helper to get or create a unique session player ID for multi-tab/device distinction
+const getPlayerId = () => {
+  let pid = localStorage.getItem('quiz_player_id');
+  if (!pid) {
+    pid = 'p_' + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('quiz_player_id', pid);
+  }
+  return pid;
+};
+
 // Web Audio API helper for sound effects
 export function playSound(type: 'buzz' | 'arm' | 'success' | 'reset') {
   try {
@@ -47,7 +57,6 @@ export function playSound(type: 'buzz' | 'arm' | 'success' | 'reset') {
     const now = ctx.currentTime;
 
     if (type === 'buzz') {
-      // High energetic buzzer sound
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(440, now);
       osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
@@ -56,17 +65,15 @@ export function playSound(type: 'buzz' | 'arm' | 'success' | 'reset') {
       osc.start(now);
       osc.stop(now + 0.3);
     } else if (type === 'arm') {
-      // Ready chime
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-      osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.1);
+      osc.frequency.setValueAtTime(783.99, now + 0.2);
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
       osc.start(now);
       osc.stop(now + 0.4);
     } else if (type === 'success') {
-      // Victory chime
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(587.33, now);
       osc.frequency.setValueAtTime(880, now + 0.15);
@@ -75,7 +82,6 @@ export function playSound(type: 'buzz' | 'arm' | 'success' | 'reset') {
       osc.start(now);
       osc.stop(now + 0.5);
     } else if (type === 'reset') {
-      // Reset sound
       osc.type = 'sine';
       osc.frequency.setValueAtTime(300, now);
       osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
@@ -85,7 +91,7 @@ export function playSound(type: 'buzz' | 'arm' | 'success' | 'reset') {
       osc.stop(now + 0.25);
     }
   } catch (e) {
-    // Audio context might be restricted before user interaction
+    // Audio context might be restricted
   }
 }
 
@@ -98,7 +104,6 @@ export function useQuizRoom() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Effect to listen to room changes, players, and buzzes when roomCode is set
   useEffect(() => {
     if (!roomCode) return;
 
@@ -107,7 +112,6 @@ export function useQuizRoom() {
     let unsubBuzzes: () => void;
 
     try {
-      // 1. Listen to Room document
       const roomRef = doc(db, 'rooms', roomCode);
       unsubRoom = onSnapshot(roomRef, (docSnap) => {
         if (docSnap.exists()) {
@@ -120,7 +124,6 @@ export function useQuizRoom() {
         handleFirestoreError(err, OperationType.GET, `rooms/${roomCode}`);
       });
 
-      // 2. Listen to Players subcollection
       const playersRef = collection(db, 'rooms', roomCode, 'players');
       unsubPlayers = onSnapshot(playersRef, (snapshot) => {
         const playersList: Player[] = [];
@@ -132,7 +135,6 @@ export function useQuizRoom() {
         handleFirestoreError(err, OperationType.LIST, `rooms/${roomCode}/players`);
       });
 
-      // 3. Listen to Buzzes subcollection ordered by timestamp
       const buzzesRef = collection(db, 'rooms', roomCode, 'buzzes');
       const qBuzzes = query(buzzesRef, orderBy('timestamp', 'asc'));
       unsubBuzzes = onSnapshot(qBuzzes, (snapshot) => {
@@ -156,14 +158,13 @@ export function useQuizRoom() {
     };
   }, [roomCode]);
 
-  // Create a new room
   const createRoom = async (hostName: string): Promise<string> => {
     setLoading(true);
     setError(null);
     try {
       const user = await ensureAuthenticated();
-      // Generate 4-character uppercase code
       const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const playerId = getPlayerId();
       const roomRef = doc(db, 'rooms', code);
       
       const roomData: RoomData = {
@@ -178,10 +179,9 @@ export function useQuizRoom() {
 
       await setDoc(roomRef, roomData);
 
-      // Add host as first player
-      const playerRef = doc(db, 'rooms', code, 'players', user.uid);
+      const playerRef = doc(db, 'rooms', code, 'players', playerId);
       const hostPlayer: Player = {
-        id: user.uid,
+        id: playerId,
         name: hostName,
         score: 0,
         isHost: true,
@@ -189,7 +189,7 @@ export function useQuizRoom() {
       };
       await setDoc(playerRef, hostPlayer);
 
-      setCurrentUser({ id: user.uid, name: hostName, isHost: true });
+      setCurrentUser({ id: playerId, name: hostName, isHost: true });
       setRoomCode(code);
       setLoading(false);
       return code;
@@ -200,13 +200,13 @@ export function useQuizRoom() {
     }
   };
 
-  // Join an existing room
   const joinRoom = async (code: string, playerName: string): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
       const cleanCode = code.trim().toUpperCase();
-      const user = await ensureAuthenticated();
+      await ensureAuthenticated();
+      const playerId = getPlayerId();
       
       const roomRef = doc(db, 'rooms', cleanCode);
       const roomSnap = await getDoc(roomRef);
@@ -215,10 +215,9 @@ export function useQuizRoom() {
         throw new Error("Salon introuvable. Vérifiez le code.");
       }
 
-      // Add player to room players subcollection
-      const playerRef = doc(db, 'rooms', cleanCode, 'players', user.uid);
+      const playerRef = doc(db, 'rooms', cleanCode, 'players', playerId);
       const player: Player = {
-        id: user.uid,
+        id: playerId,
         name: playerName,
         score: 0,
         isHost: false,
@@ -226,7 +225,7 @@ export function useQuizRoom() {
       };
       await setDoc(playerRef, player, { merge: true });
 
-      setCurrentUser({ id: user.uid, name: playerName, isHost: false });
+      setCurrentUser({ id: playerId, name: playerName, isHost: false });
       setRoomCode(cleanCode);
       setLoading(false);
     } catch (err: any) {
@@ -236,14 +235,12 @@ export function useQuizRoom() {
     }
   };
 
-  // Arm the buzzer (Host action)
   const armBuzzer = async (armed: boolean) => {
     if (!roomCode) return;
     try {
       const roomRef = doc(db, 'rooms', roomCode);
       
       if (armed) {
-        // Clear previous buzzes when re-arming
         const buzzesRef = collection(db, 'rooms', roomCode, 'buzzes');
         const snap = await getDocs(buzzesRef);
         const batch = writeBatch(db);
@@ -262,7 +259,6 @@ export function useQuizRoom() {
     }
   };
 
-  // Reset buzzer & clear buzzes
   const resetBuzzer = async () => {
     if (!roomCode) return;
     try {
@@ -283,19 +279,17 @@ export function useQuizRoom() {
     }
   };
 
-  // Press Buzzer (Player action)
+  // Press Buzzer - allows sequential buzzes without auto-locking on position 1
   const pressBuzzer = async () => {
     if (!roomCode || !currentUser || !room || !room.buzzerState) return;
 
     try {
       const buzzesRef = collection(db, 'rooms', roomCode, 'buzzes');
       
-      // Check if player already buzzed this round
       const existingBuzzRef = doc(db, 'rooms', roomCode, 'buzzes', currentUser.id);
       const existingSnap = await getDoc(existingBuzzRef);
-      if (existingSnap.exists()) return; // Already buzzed
+      if (existingSnap.exists()) return;
 
-      // Get current count to determine position
       const currentBuzzesSnap = await getDocs(buzzesRef);
       const position = currentBuzzesSnap.size + 1;
 
@@ -309,14 +303,11 @@ export function useQuizRoom() {
 
       await setDoc(existingBuzzRef, buzz);
 
-      // If first buzzer, automatically lock buzzer state so others are blocked!
-      if (position === 1) {
-        const roomRef = doc(db, 'rooms', roomCode);
-        await updateDoc(roomRef, {
-          buzzerState: false,
-          status: 'buzzed',
-        });
-      }
+      // We do NOT auto-lock buzzerState so others can continue buzzing sequentially!
+      const roomRef = doc(db, 'rooms', roomCode);
+      await updateDoc(roomRef, {
+        status: 'buzzed',
+      });
 
       playSound(position === 1 ? 'success' : 'buzz');
     } catch (err) {
@@ -324,7 +315,6 @@ export function useQuizRoom() {
     }
   };
 
-  // Update question
   const updateQuestion = async (question: string) => {
     if (!roomCode) return;
     try {
@@ -335,7 +325,6 @@ export function useQuizRoom() {
     }
   };
 
-  // Update player score
   const updateScore = async (playerId: string, delta: number) => {
     if (!roomCode) return;
     try {
@@ -350,7 +339,6 @@ export function useQuizRoom() {
     }
   };
 
-  // Leave room
   const leaveRoom = useCallback(async () => {
     if (!roomCode || !currentUser) {
       setRoomCode(null);
