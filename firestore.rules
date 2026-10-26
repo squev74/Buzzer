@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(roomId) && request.resource.data.keys().hasAll(['code', 'hostId', 'hostName', 'status', 'buzzerState', 'createdAt']) && request.resource.data.hostId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.hostId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'buzzerState', 'currentQuestion', 'roundNumber'])
+      );
+      allow delete: if isSignedIn() && resource.data.hostId == request.auth.uid;
+
+      match /players/{playerId} {
+        allow read: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidId(playerId);
+        allow delete: if isSignedIn();
+      }
+
+      match /buzzes/{buzzId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(buzzId) && request.resource.data.playerId == request.auth.uid;
+        allow delete: if isSignedIn();
+      }
+    }
+  }
+}

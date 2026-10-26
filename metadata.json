@@ -1,0 +1,6 @@
+{
+  "name": "Quiz Buzzer Live",
+  "description": "Application web de quiz en temps réel avec système de buzzer synchronisé",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

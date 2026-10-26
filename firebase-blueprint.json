@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "Quiz Room entity",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 4, "maxLength": 10 },
+        "hostId": { "type": "string" },
+        "hostName": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string" },
+        "buzzerState": { "type": "boolean" },
+        "currentQuestion": { "type": "string", "maxLength": 300 },
+        "roundNumber": { "type": "number" },
+        "createdAt": { "type": "object" }
+      },
+      "required": ["code", "hostId", "hostName", "status", "buzzerState", "createdAt"]
+    },
+    "Player": {
+      "title": "Player",
+      "description": "Player in quiz room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "score": { "type": "number" },
+        "joinedAt": { "type": "object" },
+        "isHost": { "type": "boolean" },
+        "isConnected": { "type": "boolean" }
+      },
+      "required": ["id", "name", "score", "joinedAt", "isHost"]
+    },
+    "Buzz": {
+      "title": "Buzz",
+      "description": "Buzzer event record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "playerId": { "type": "string" },
+        "playerName": { "type": "string", "maxLength": 30 },
+        "timestamp": { "type": "object" },
+        "position": { "type": "number" }
+      },
+      "required": ["id", "playerId", "playerName", "timestamp", "position"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/Room" },
+      "description": "Quiz room document"
+    },
+    "/rooms/{roomId}/players/{playerId}": {
+      "schema": { "$ref": "#/entities/Player" },
+      "description": "Players in room"
+    },
+    "/rooms/{roomId}/buzzes/{buzzId}": {
+      "schema": { "$ref": "#/entities/Buzz" },
+      "description": "Buzzes registered for current round"
+    }
+  }
+}
